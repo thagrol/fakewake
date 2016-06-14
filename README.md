@@ -19,7 +19,7 @@ and a simple circuit to connect it to the PC's motherboard and PSU.
 
 - Raspberry Pi (any model) with working network.
 - 1 x M74HC4066B1R
-- 1 x 10K ohm resistor
+- 3 x 10K ohm resistor
 - wire, stripboard, etc as needed
 
 ### Recommended
