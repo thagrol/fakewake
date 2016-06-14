@@ -507,7 +507,7 @@ if __name__ == '__main__':
     except OSError:
         pass
     try:
-        os.rename(logfile, log_file +'2')
+        os.rename(log_file, log_file +'2')
     except OSError:
         pass
     #   base logger
