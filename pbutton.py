@@ -17,7 +17,7 @@ HOLD_TIME = 2
 # functions
 def btn_held():
     # respond to long press on button
-    os.system("poweroff")
+    system("poweroff")
 
 # do stuff
 if __name__ == '__main__':
