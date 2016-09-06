@@ -16,6 +16,7 @@ import os
 import pwd
 import select
 import socket
+import StringIO
 import struct
 import sys
 import time
@@ -23,6 +24,41 @@ import threading
 
 
 # function definitiona start here
+
+def valid_host(ipaddr):
+    # validate ipaddr against HOST_ALLOW and HOSTS_DENY
+    #
+    # usual unix/linux rules:
+    #    valid if ipaddr in HOSTS_ALLOW
+    #    otherwise invalid if in HOSTS_DENY
+    #    otherwise valid
+    #
+    # empty lists disable access control
+    # a single entry of '*' in HOSTS_DENY blocks all hosts
+    # not listed in HOSTS_ALLOW
+
+    logging.debug('HOSTS_ALLOW %s' % HOSTS_ALLOW)
+    logging.debug('HOSTS_DENY %s' % HOSTS_DENY)
+    # make sure we have a string
+    ipaddr = str(ipaddr)
+    logging.debug('ipaddr to check %s' % ipaddr)
+
+    if ipaddr in HOSTS_ALLOW:
+        # always allowed
+        return True
+
+    if '*' in HOSTS_DENY:
+        # all denied
+        return False
+
+    if ipaddr in HOSTS_DENY:
+        # allow all except denied
+        return False
+
+    # otherwise
+    # default action
+    return True
+
 
 # daemonize
 # based on the python recipe at
@@ -197,7 +233,14 @@ def wol_listener():
         # now we can actually do some listening
         r, w, e = select.select(listeners, [], [], 0)
         for s in r:
-            inc = s.recv(1024)
+            inc = ''
+##            inc = s.recv(1024)
+            inc, sender = s.recvfrom(1024)
+            logging.debug('packet received from %s' % sender[0])
+            # validate host
+            if valid_host(sender[0]) == False:
+                logging.debug('invalid sender. Ignoring packet.')
+                continue
             for k in magic_packets:
                 if (magic_packets[k] is not None
                     and magic_packets[k] in inc):
@@ -229,9 +272,9 @@ def wol_listener():
 
                     if go_nogo:
                         # press button here
-                        press_button(target_button, duration)
-                        # assume only one magic packet at a time
-                        break
+                        press_button(target_button, target_duration)
+##                        # assume only one magic packet at a time
+##                        break
 ##            if wake_packet is not None and wake_packet in inc:
 ##                # do wake stuff
 ##                logging.debug('wake packet received')
@@ -288,6 +331,20 @@ def webserver(host, port):
 
     global last_action_time, privs_droppable
 
+    base_header = 'HTTP/1.0 '
+    ok_header = '200 OK\n\n'
+    html_header = '<!DOCTYPE HTML>\n<html><head><title>fakewake</title>\n'
+    clacks_header = '<meta http-equiv="X-Clacks-Overhead" content="GNU Terry Pratchett" />\n'
+    refresh_header = '<meta http-equiv="refresh" content="%s;/">' % WEBSERVER_RELOAD_DELAY
+    end_header = '</head><body>'
+
+    error403 = base_header + ok_header + html_header + clacks_header + end_header
+    error403 += '<h2>403 Forbidden</h2></body></html>'
+    error404 = base_header + ok_header + html_header + clacks_header + end_header
+    error404 += '<h2>This space unintetionally left blank</h2></body></html>'
+    error405 = base_header + '405 Method Not Allowed\n' + html_header + clacks_header + end_header
+    error405 += '<h2>405 Method Not Allowed</h2></body></html>'
+    
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     logging.debug('binding to %s:%s' % (host,port))
@@ -302,6 +359,14 @@ def webserver(host, port):
             if s == server_socket:
                 # accept socket and handle request
                 client_socket, client_address = server_socket.accept()
+                # validate host
+                if valid_host(client_address[0]) == False:
+                    logging.info('Access attempted from blocked host %s(%s)' % (client_address[0],
+                                                                                socket.gethostbyaddr(client_address[0])[0]))
+                    client_socket.sendall(error403)
+                    client_socket.shutdown(socket.SHUT_RDWR)
+                    client_socket.close
+                    continue
                 # receive request. This may block
                 request = client_socket.recv(1024)
                 logging.info('Connection from ' + client_address[0])
@@ -312,7 +377,7 @@ def webserver(host, port):
                     if prefix in ('POST', 'HEAD', 'PUT', 'DELETE',
                                     'OPTIONS', 'CONNECT'):
                         logging.debug('Sending Error 405')
-                        client_socket.sendall('HTTP/1.1 405 Method Not Allowed\n')
+                        client_socket.sendall(error405)
                     elif prefix != 'GET':
                         # don't know and don't care what this is
                         pass
@@ -322,18 +387,38 @@ def webserver(host, port):
                         method, url, trailer = line.split()
                         # need this due to form/button hack in html code
                         url = url.split('?')[0]
-                        if url not in ('/', '/power', '/forcepower','/reset'):
-                            client_socket.sendall('HTTP/1.1 404 Not Found\n\n')
+                        if url not in ('/', '/power', '/forcepower','/reset','/config', '/log'):
+                            client_socket.sendall(error404)
+                        elif url == '/log':
+                            # show log file
+                            logging.debug('Sending log file(%s)' % log_file)
+                            reply = base_header + ok_header
+                            try:
+                                lf = open(log_file, 'r')
+                                reply += lf.read()
+                                lf.close()
+                            except KeyboardInterrupt:
+                                raise
+                            except IOError as e:
+                                reply += str(e)
+                            client_socket.sendall(reply)
+                        elif url == '/config':
+                            # show config
+                            reply = base_header + ok_header
+                            current_config = StringIO.StringIO()
+                            config.write(current_config)
+                            reply += current_config.getvalue()
+                            current_config.close()
+                            # send replycfg
+                            logging.debug('Sending config')
+                            client_socket.sendall(reply)
                         elif url == '/':
                             # assemble page
                             if time.time() > last_action_time + MIN_INTERVAL:
                                 button_state = ''
                             else:
                                 button_state = 'disabled'
-                            reply = 'HTTP/1.1 200 OK\n\n'
-                            reply += '<!DOCTYPE HTML>\n'
-                            reply += '<html><head><title>fakewake</title>'
-                            reply += '<meta http-equiv="refresh" content="%s"></head><body>' % WEBSERVER_RELOAD_DELAY
+                            reply = base_header + ok_header + html_header + clacks_header + refresh_header + end_header
                             reply += '<b>PSU State:</b> '
                             if PSU_SENSE_ENABLED:
                                 if PSU_SENSE.value:
@@ -363,10 +448,7 @@ def webserver(host, port):
                         else:
                             # send reply
                             # this is the same for all actions
-                            reply = 'HTTP/1.1 200 OK\n\n'
-                            reply += '<!DOCTYPE HTML>\n'
-                            reply += '<html><head><title>fakewake</title>'
-                            reply += '<meta http-equiv="refresh" content="%s; url=/"></head><body>' % WEBSERVER_RELOAD_DELAY
+                            reply = base_header + ok_header + html_header + clacks_header + refresh_header
                             reply += 'Working. Please wait...'
                             reply += '<center><form action="/" method="get">'
                             reply += '<input type="submit" value="Continue">'
@@ -462,7 +544,9 @@ if __name__ == '__main__':
                       'aux1':'0',
                       'aux2':'0',
                       'aux1_mac':'',
-                      'aux2_mac':''}
+                      'aux2_mac':'',
+                      'hosts_allow':'',
+                      'hosts_deny':''}
     # pinger
     PINGABLE = 'Unknown'
 
@@ -498,7 +582,8 @@ if __name__ == '__main__':
         _daemonize_me()
     
     # set up logging
-    log_file = '/tmp/fakewake.log'
+##    log_file = '/tmp/fakewake.log'
+    log_file = '/tmp/fwdev.log'
     log_format = '%(asctime)s:%(levelname)s:%(threadName)s:%(message)s'
     log_filemode = 'w'
     #   manage log files
@@ -530,10 +615,10 @@ if __name__ == '__main__':
     stderr_logger.setFormatter(stderr_formatter)
     logging.getLogger('').addHandler(stderr_logger)
     #   uncomment to enable logging to console
-    ##console_logger = logging.StreamHandler()
-    ##console_formatter = logging.Formatter(log_format)
-    ##console_logger.setFormatter(console_formatter)
-    ##logging.getLogger('').addHandler(console_logger)
+    console_logger = logging.StreamHandler()
+    console_formatter = logging.Formatter(log_format)
+    console_logger.setFormatter(console_formatter)
+    logging.getLogger('').addHandler(console_logger)
 
     #   just in case there's a running tail -f on the log file
     #   it's a hack, I know.
@@ -609,7 +694,7 @@ if __name__ == '__main__':
         WOL_AUX1_MAC_ADDRESS = default_config['aux1_mac']
         WOL_AUX1_MAC_ADDRESS = default_config['aux1_mac']
     # parse RAW_WOL_PORTS
-    WOL_PORTS=[]
+    WOL_PORTS = []
     for t in RAW_WOL_PORTS.split(','):
         t.strip()
         WOL_PORTS.append(int(t))
@@ -623,6 +708,21 @@ if __name__ == '__main__':
         RESTART_THREADS = config.getboolean('threads', 'restart')
     except ConfigParser.NoSectionError:
         RESTART_THREADS = bool(default_config['restart'])
+    try:
+        RAW_HOSTS_ALLOW = config.get('security','hosts_allow')
+        RAW_HOSTS_DENY = config.get('security','hosts_deny')
+    except ConfigParser.NoSectionError:
+        RAW_HOSTS_ALLOW = default_config['hosts_allow']
+        RAW_HOSTS_DENY = default_config['hosts_deny']
+    # parse RAW host lists
+    HOSTS_ALLOW = []
+    for t in RAW_HOSTS_ALLOW.split(','):
+        t.strip
+        HOSTS_ALLOW.append(t)
+    HOSTS_DENY = []
+    for t in RAW_HOSTS_DENY.split(','):
+        t.strip
+        HOSTS_DENY.append(t)
 
     #  enable/disable flags
     POWER_ENABLED = bool(POWER_PIN)

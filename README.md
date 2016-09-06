@@ -97,6 +97,8 @@ similar to the one below to /etc/rc.local. Ensure it is added above the line tha
 
 - Log files are written to `/tmp/fakewake.log` starting fresh when the daemon is started. 
 The previous two log files are retained.
+- Current log file can be viewed if the webserver is running by accessing <sever>/log
+- Current configuration can be viewed if the webserver is running by accessing <sever>/config
 - When started by root (or sudo) the daemon will switch to running as nobody:nogroup 
 once all ports have been bound.
 - Without a PSU_SENSE connection (the 3.3v tap) wake on LAN will not be available as
@@ -107,7 +109,7 @@ to receive all ethernet frames.
 - If you're not comfortable connecting 3.3v from the PC's PSU directly to the Pi's gpio, 
 it should be possible to insert an optocoupler etc, so long as the gpio pin is pulled high 
 while the PSU is fully on and low when the PSU is in standby, soft off, or off.
-- Pi2 and Pi3 have not been tested. They should work, but check their current requirements 
+- Pi3 has not been tested. They should work, but check their current requirements 
 do not exceed that provided by the 5v standby line of the PC's PSU.
 - I've no idea whether this approach will work on a Mac as I don't have access to one.
 
