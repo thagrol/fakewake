@@ -582,8 +582,8 @@ if __name__ == '__main__':
         _daemonize_me()
     
     # set up logging
-##    log_file = '/tmp/fakewake.log'
-    log_file = '/tmp/fwdev.log'
+    log_file = '/tmp/fakewake.log'
+##    log_file = '/tmp/fwdev.log'
     log_format = '%(asctime)s:%(levelname)s:%(threadName)s:%(message)s'
     log_filemode = 'w'
     #   manage log files
