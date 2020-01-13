@@ -130,4 +130,4 @@ and has no promise of fitness for purpose.
 
 Please do not distribute modified versions.
 
-__Non-Comercial use only__
+__Non-Commercial use only__
