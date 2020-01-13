@@ -95,6 +95,7 @@ similar to the one below to /etc/rc.local. Ensure it is added above the line tha
 
 ## Hints & Tips
 
+- Refer to default.cfg for details of configuration options and the default config.
 - Log files are written to `/tmp/fakewake.log` starting fresh when the daemon is started. 
 The previous two log files are retained.
 - Current log file can be viewed if the webserver is running by accessing <sever>/log
@@ -106,10 +107,11 @@ not knowing whether the PSU is on makes behaviour unpredictable.
 - Wake on LAN magic packets must be sent as UDP broadcast packets to one or more of 
 the configured ports. The daemon does not listen at a low enough level in the network stack 
 to receive all ethernet frames.
-- If you're not comfortable connecting 3.3v from the PC's PSU directly to the Pi's gpio, 
-it should be possible to insert an optocoupler etc, so long as the gpio pin is pulled high 
+- If you're not comfortable connecting 3.3v from the PC's PSU directly to the Pi's gpio, an 
+optocoupler may be used. In which case a custom config muts be used with "psu_sense_active_low"
+set to "True"
 while the PSU is fully on and low when the PSU is in standby, soft off, or off.
-- Pi3 has not been tested. They should work, but check their current requirements 
+- Pi3 and later have not been tested. They should work, but check their current requirements 
 do not exceed that provided by the 5v standby line of the PC's PSU.
 - I've no idea whether this approach will work on a Mac as I don't have access to one.
 
