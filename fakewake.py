@@ -262,10 +262,10 @@ def wol_listener():
                         target_duration = SHORT_PRESS
                     go_nogo = False
                     if (k == 'wake'
-                        and PSU_SENSE.value == False):
+                        and PSU_SENSE.is_active == False):
                         go_nogo = True
                     if (k in ('shutdown', 'forceoff', 'reset')
-                        and PSU_SENSE.value == True):
+                        and PSU_SENSE.is_active == True):
                         go_nogo = True
                     if k in ('aux1', 'aux2'):
                         go_nogo = True
@@ -273,46 +273,6 @@ def wol_listener():
                     if go_nogo:
                         # press button here
                         press_button(target_button, target_duration)
-##                        # assume only one magic packet at a time
-##                        break
-##            if wake_packet is not None and wake_packet in inc:
-##                # do wake stuff
-##                logging.debug('wake packet received')
-##                if not PSU_SENSE.value:
-##                    # PSU is off
-##                    logging.debug('PSU is off. Pressing Power button')
-##                    press_button(POWER_SWITCH, SHORT_PRESS)
-##                else:
-##                    logging.debug('PSU is on. Ignoring packet.')
-##            elif shutdown_packet is not None and shutdown_packet in inc:
-##                # do shutdown stuff
-##                logging.debug('shutdown packet received')
-##                if PSU_SENSE.value:
-##                    # PSU is on
-##                    logging.debug('PSU is on. Pressing Power button')
-##                    press_button(POWER_SWITCH, SHORT_PRESS)
-##                else:
-##                    logging.debug('PSU is off. Ignoring packet.')
-##            elif reset_packet is not None and reset_packet in inc:
-##                # do reset stuff
-##                logging.debug('reset packet received')
-##                if PSU_SENSE.value:
-##                    # PSU is on. No sense in doing anything when it's off
-##                    logging.debug('PSU is on. Pressing Reset button')
-##                    press_button(RESET_SWITCH, SHORT_PRESS)
-##                else:
-##                    logging.debug('PSU is off. Ignoring packet.')
-##            elif forceoff_packet is not None and forceoff_packet in inc:
-##                # do forceoff stuff
-##                logging.debug('forceoff packet received')
-##                if PSU_SENSE.value:
-##                    # PSU is on. No sense in doing anything when it's off
-##                    logging.debug('PSU is on. Long press on Power button')
-##                    press_button(POWER_SWITCH, LONG_PRESS)
-##                else:
-##                    logging.debug('PSU is off. Ignoring packet.')
-##            else:
-##                logging.debug('Packet not for us')
         time.sleep(0.1)
 
     for listener in listeners:
@@ -421,7 +381,7 @@ def webserver(host, port):
                             reply = base_header + ok_header + html_header + clacks_header + refresh_header + end_header
                             reply += '<b>PSU State:</b> '
                             if PSU_SENSE_ENABLED:
-                                if PSU_SENSE.value:
+                                if PSU_SENSE.is_active:
                                     reply += 'On'
                                 else:
                                     reply += 'Off/Standby'
@@ -458,10 +418,10 @@ def webserver(host, port):
                             if url == '/power' and POWER_ENABLED:
                                 logging.debug('Pushing Power Button')
                                 press_button(POWER_SWITCH, SHORT_PRESS)
-                            if url =='/forcepower' and POWER_ENABLED and PSU_SENSE.value:
+                            if url =='/forcepower' and POWER_ENABLED and PSU_SENSE.is_active:
                                 logging.debug('Long Push on Power Button')
                                 press_button(POWER_SWITCH, LONG_PRESS)
-                            if url =='/reset' and RESET_ENABLED and PSU_SENSE.value:
+                            if url =='/reset' and RESET_ENABLED and PSU_SENSE.is_active:
                                 logging.debug('Pushing Reset Button')
                                 press_button(RESET_SWITCH, SHORT_PRESS)
                             if url =='/aux1' and AUX1_ENABLED:
@@ -546,7 +506,8 @@ if __name__ == '__main__':
                       'aux1_mac':'',
                       'aux2_mac':'',
                       'hosts_allow':'',
-                      'hosts_deny':''}
+                      'hosts_deny':'',
+                      'psu_sense_active_low':False}
     # pinger
     PINGABLE = 'Unknown'
 
@@ -649,12 +610,14 @@ if __name__ == '__main__':
         POWER_PIN = config.getint('pins', 'power')
         RESET_PIN = config.getint('pins','reset')
         PSU_SENSE_PIN = config.getint('pins', 'psu_sense')
+        PSU_SENSE_ACTIVE_LOW = config.getboolean('pins', 'psu_sense_active_low')
         AUX1_PIN = config.getint('pins', 'aux1')
         AUX2_PIN = config.getint('pins', 'aux2')
     except ConfigParser.NoSectionError:
         POWER_PIN = int(default_config['power'])
         RESET_PIN = int(default_config['reset'])
         PSU_SENSE_PIN = int(default_config['psu_sense'])
+        PSU_SENSE_ACTIVE_LOW = default_config['psu_sense_active_low']
         AUX1_PIN = int(default_config['aux1'])
         AUX2_PIN = int(default_config['aux2'])
     try:
@@ -755,7 +718,7 @@ if __name__ == '__main__':
         if PSU_SENSE_ENABLED:
             logging.debug('  PSU sense')
             PSU_SENSE = gpiozero.DigitalInputDevice(PSU_SENSE_PIN,
-                                                    pull_up=False)
+                                                    pull_up=PSU_SENSE_ACTIVE_LOW)
 
         if AUX1_ENABLED:
             logging.debug('  aux 1')
