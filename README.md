@@ -95,6 +95,7 @@ similar to the one below to /etc/rc.local. Ensure it is added above the line tha
 
 ## Hints & Tips
 
+- See [here](alternatives.md) for information on alternatives to the M74HC4066B1R.
 - Refer to default.cfg for details of configuration options and the default config.
 - Log files are written to `/tmp/fakewake.log` starting fresh when the daemon is started. 
 The previous two log files are retained.
