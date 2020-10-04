@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 ##
 ## This software is supplied "as is" with no warranties either expressed or implied.
 ##
@@ -8,7 +8,7 @@
 
 # imports
 import argparse
-import ConfigParser
+import configparser
 import gpiozero
 import grp
 import logging
@@ -16,7 +16,7 @@ import os
 import pwd
 import select
 import socket
-import StringIO
+import io
 import struct
 import sys
 import time
@@ -76,7 +76,7 @@ def _daemonize_me():
     try:
         pid = os.fork()
     except OSError as e:
-        raise Exception, '%s [%d]' % (e.strerror, e.errno)
+        raise Exception('%s [%d]' % (e.strerror, e.errno))
 
     if pid == 0:
         # we are the first child
@@ -84,7 +84,7 @@ def _daemonize_me():
         try:
             pid = os.fork()
         except OSError as e:
-            raise Exception, '%s [%d]' % (e.strerror, e.errno)
+            raise Exception('%s [%d]' % (e.strerror, e.errno))
         if pid == 0:
             # second child
             os.chdir(workingdir)
@@ -195,7 +195,7 @@ def wol_listener():
     magic_packets['aux2'] = make_packet(WOL_AUX2_MAC_ADDRESS)
 
     empty_packet_count = 0
-    for packet in magic_packets.values():
+    for packet in list(magic_packets.values()):
         if packet is None:
             empty_packet_count += 1
     
@@ -365,7 +365,7 @@ def webserver(host, port):
                         elif url == '/config':
                             # show config
                             reply = base_header + ok_header
-                            current_config = StringIO.StringIO()
+                            current_config = io.StringIO()
                             config.write(current_config)
                             reply += current_config.getvalue()
                             current_config.close()
@@ -566,7 +566,7 @@ if __name__ == '__main__':
                         format=log_format)
     #   set permissions on log file
     try:
-        os.chmod(log_file, 0666)
+        os.chmod(log_file, 0o666)
     except OSError:
         pass
     #   log errors and warnings to stderr
@@ -590,10 +590,10 @@ if __name__ == '__main__':
     # read config
     logging.debug('reading config file')
     # this is probably abusing the defaults mechanism...
-    config = ConfigParser.SafeConfigParser(default_config)
+    config = configparser.SafeConfigParser(default_config)
     try:
         t = config.read(cmd_args.config)
-    except ConfigParser.Error as e:
+    except configparser.Error as e:
         # error when parsing config file
         msg = 'Error parsing config file %s: %s' % (cmd_args.config, str(e))
         logging.critical(msg)
@@ -613,7 +613,7 @@ if __name__ == '__main__':
         PSU_SENSE_ACTIVE_LOW = config.getboolean('pins', 'psu_sense_active_low')
         AUX1_PIN = config.getint('pins', 'aux1')
         AUX2_PIN = config.getint('pins', 'aux2')
-    except ConfigParser.NoSectionError:
+    except configparser.NoSectionError:
         POWER_PIN = int(default_config['power'])
         RESET_PIN = int(default_config['reset'])
         PSU_SENSE_PIN = int(default_config['psu_sense'])
@@ -624,7 +624,7 @@ if __name__ == '__main__':
         SHORT_PRESS = config.getfloat('timings', 'short')
         LONG_PRESS = config.getfloat('timings', 'long')
         MIN_INTERVAL = config.getfloat('timings','min_interval')
-    except ConfigParser.NoSectionError:
+    except configparser.NoSectionError:
         SHORT_PRESS = float(default_config['short'])
         LONG_PRESS = float(default_config['long'])
         MIN_INTERVAL = float(default_config['min_interval'])
@@ -633,7 +633,7 @@ if __name__ == '__main__':
         WEBSERVER_HOST = config.get('webserver','host')
         WEBSERVER_PORT = config.getint('webserver', 'web_port')
         WEBSERVER_RELOAD_DELAY = config.get('webserver','reload_delay')
-    except ConfigParser.NoSectionError:
+    except configparser.NoSectionError:
         WEBSERVER_ENABLED = bool(default_config['web_enabled'])
         WEBSERVER_HOST = default_config['host']
         WEBSERVER_PORT = int(default_config['web_port'])
@@ -647,7 +647,7 @@ if __name__ == '__main__':
         WOL_FORCEOFF_MAC_ADDRESS = config.get('wol', 'reset_mac')
         WOL_AUX1_MAC_ADDRESS = config.get('wol', 'aux1_mac')
         WOL_AUX2_MAC_ADDRESS = config.get('wol', 'aux2_mac')
-    except ConfigParser.NoSectionError:
+    except configparser.NoSectionError:
         WOL_ENABLED = bool(default_config['wol_enabled'])
         RAW_WOL_PORTS = default_config['wol_ports']
         WOL_WAKE_MAC_ADDRESS = default_config['wake_mac']
@@ -664,17 +664,17 @@ if __name__ == '__main__':
     try:
         TARGET_ID = config.get('pinger', 'target')
         PING_INTERVAL = config.getfloat('pinger', 'interval')
-    except ConfigParser.NoSectionError:
+    except configparser.NoSectionError:
         TARGET_ID = default_config['target']
         PING_INTERVAL = float(default_config['interval'])
     try:
         RESTART_THREADS = config.getboolean('threads', 'restart')
-    except ConfigParser.NoSectionError:
+    except configparser.NoSectionError:
         RESTART_THREADS = bool(default_config['restart'])
     try:
         RAW_HOSTS_ALLOW = config.get('security','hosts_allow')
         RAW_HOSTS_DENY = config.get('security','hosts_deny')
-    except ConfigParser.NoSectionError:
+    except configparser.NoSectionError:
         RAW_HOSTS_ALLOW = default_config['hosts_allow']
         RAW_HOSTS_DENY = default_config['hosts_deny']
     # parse RAW host lists
@@ -783,7 +783,7 @@ if __name__ == '__main__':
                         logging.debug('Unabled to set uid to %s %s' % (PRIVS_NAME, e))
                     # umask
                     try:
-                        os.umask(077)
+                        os.umask(0o77)
                     except OSError as e:
                         drop_failed = True
                         logging.debug('Unabled to set umask to 077 %s' % (PRIVS_NAME, e))
