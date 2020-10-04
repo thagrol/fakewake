@@ -328,16 +328,17 @@ def webserver(host, port):
                     client_socket.close
                     continue
                 # receive request. This may block
-                request = client_socket.recv(1024)
+                request = client_socket.recv(1024).decode()
                 logging.info('Connection from ' + client_address[0])
                 logging.debug('Parsing reguest')
                 # parse request
                 for line in request.splitlines():
+                    logging.debug(line)
                     prefix = line.split(' ',1)[0]
                     if prefix in ('POST', 'HEAD', 'PUT', 'DELETE',
                                     'OPTIONS', 'CONNECT'):
                         logging.debug('Sending Error 405')
-                        client_socket.sendall(error405)
+                        client_socket.sendall(error405.encode())
                     elif prefix != 'GET':
                         # don't know and don't care what this is
                         pass
@@ -348,7 +349,7 @@ def webserver(host, port):
                         # need this due to form/button hack in html code
                         url = url.split('?')[0]
                         if url not in ('/', '/power', '/forcepower','/reset','/config', '/log'):
-                            client_socket.sendall(error404)
+                            client_socket.sendall(error404.encode())
                         elif url == '/log':
                             # show log file
                             logging.debug('Sending log file(%s)' % log_file)
@@ -361,7 +362,7 @@ def webserver(host, port):
                                 raise
                             except IOError as e:
                                 reply += str(e)
-                            client_socket.sendall(reply)
+                            client_socket.sendall(reply.encode())
                         elif url == '/config':
                             # show config
                             reply = base_header + ok_header
@@ -371,7 +372,7 @@ def webserver(host, port):
                             current_config.close()
                             # send replycfg
                             logging.debug('Sending config')
-                            client_socket.sendall(reply)
+                            client_socket.sendall(reply.encode())
                         elif url == '/':
                             # assemble page
                             if time.time() > last_action_time + MIN_INTERVAL:
@@ -404,7 +405,7 @@ def webserver(host, port):
                                 reply += '<input type="submit" value="Aux 2" %s></form><br>' % button_state
                             reply += '</center></body></html>'
                             # send reply
-                            client_socket.sendall(reply)
+                            client_socket.sendall(reply.encode())
                         else:
                             # send reply
                             # this is the same for all actions
@@ -413,7 +414,7 @@ def webserver(host, port):
                             reply += '<center><form action="/" method="get">'
                             reply += '<input type="submit" value="Continue">'
                             reply += '</form></center></body></html>'
-                            client_socket.sendall(reply)
+                            client_socket.sendall(reply.encode())
                             # do action
                             if url == '/power' and POWER_ENABLED:
                                 logging.debug('Pushing Power Button')
@@ -440,11 +441,11 @@ def webserver(host, port):
 def start_pinger():
     global PINGABLE
     PINGABLE = 'Unknown'
-    if TARGET_ID is not None:
+    if TARGET_ID[0] is not None:
         logging.debug('(re)starting Pinger')
         ping_thread = threading.Thread(name='pinger',
                                        target=pinger,
-                                       args=(TARGET_ID, PING_INTERVAL))
+                                       args=(TARGET_ID[0], PING_INTERVAL))
         ping_thread.start()
     else:
         ping_thread = None
@@ -590,7 +591,7 @@ if __name__ == '__main__':
     # read config
     logging.debug('reading config file')
     # this is probably abusing the defaults mechanism...
-    config = configparser.SafeConfigParser(default_config)
+    config = configparser.ConfigParser(default_config)
     try:
         t = config.read(cmd_args.config)
     except configparser.Error as e:
@@ -662,7 +663,7 @@ if __name__ == '__main__':
         t.strip()
         WOL_PORTS.append(int(t))
     try:
-        TARGET_ID = config.get('pinger', 'target')
+        TARGET_ID = config.get('pinger', 'target').split(',')
         PING_INTERVAL = config.getfloat('pinger', 'interval')
     except configparser.NoSectionError:
         TARGET_ID = default_config['target']
@@ -831,10 +832,27 @@ if __name__ == '__main__':
         logging.debug('stopping threads')
         stop_threads = True
         logging.debug('Freeing GPIO')
-        for o in(POWER_SWITCH, RESET_SWITCH, PSU_SENSE,
-                 AUX1, AUX2):
-            try:
-                o.close()
-            except:
-                pass
+        try:
+            POWER_SWITCH.close()
+        except:
+            pass
+        try:
+            RESET_SWITCH.close()
+        except:
+            pass
+        try:
+            AUX1.close()
+        except:
+            pass
+        try:
+            AUX2.close()
+        except:
+            pass
+            
+        # ~ for o in(POWER_SWITCH, RESET_SWITCH, PSU_SENSE,
+                 # ~ AUX1, AUX2):
+            # ~ try:
+                # ~ o.close()
+            # ~ except:
+                # ~ pass
             
