@@ -99,8 +99,8 @@ similar to the one below to /etc/rc.local. Ensure it is added above the line tha
 - Refer to default.cfg for details of configuration options and the default config.
 - Log files are written to `/tmp/fakewake.log` starting fresh when the daemon is started. 
 The previous two log files are retained.
-- Current log file can be viewed if the webserver is running by accessing <sever>/log
-- Current configuration can be viewed if the webserver is running by accessing <sever>/config
+- Current log file can be viewed if the webserver is running by accessing <server>/log
+- Current configuration can be viewed if the webserver is running by accessing <server>/config
 - When started by root (or sudo) the daemon will switch to running as nobody:nogroup 
 once all ports have been bound.
 - Without a PSU_SENSE connection (the 3.3v tap) wake on LAN will not be available as

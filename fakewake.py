@@ -112,7 +112,7 @@ def _daemonize_me():
 def pack_mac(split_mac_address):
     # given a split MAC address return it packed for sending/receiving
 
-    packed = struct.pack('!BBBBBB',
+    packed = struct.pack(b'!BBBBBB',
                          int(split_mac_address[0], 16),
                          int(split_mac_address[1], 16),
                          int(split_mac_address[2], 16),
@@ -127,6 +127,9 @@ def press_button(button, duration):
     #
     # time check prevents spamming of the switches
     global last_action_time
+    
+    if button is None:
+        return
 
     current_time = time.time()
     if current_time > last_action_time + MIN_INTERVAL:
@@ -140,33 +143,41 @@ def press_button(button, duration):
     else:
         logging.debug('Too soon after last action.')
 
-def pinger(target, interval):
+def pinger(targets, interval):
     # thread to ping target system and set result accordingly
     global PINGABLE
+    
+    logging.debug('Ping targets: %s' %targets)
 
     # create ping object
-    logging.debug('Creating pinger object for %s' % TARGET_ID)
-    pingthing = gpiozero.PingServer(target)
-    # ensure we have an apropriate value
-    if pingthing.value:
-        PINGABLE = 'Yes'
-    else:
-        PINGABLE = 'No'
-    # keep testing
+    pingthings = {}
+    for t in targets:
+        pingthings[t] = gpiozero.PingServer(t)
+    logging.debug(pingthings)
+    # ~ logging.debug('Creating pinger object for %s' % target)
+    # ~ pingthing = gpiozero.PingServer(target)
+    # ~ # ensure we have an apropriate value
+    # ~ if pingthing.value:
+        # ~ PINGABLE = 'Yes'
+    # ~ else:
+        # ~ PINGABLE = 'No'
+    # keep pinging
+    # for an "and" combination of multiple targets
     while stop_threads == False:
-        if pingthing.value:
-            PINGABLE = 'Yes'
-        else:
-            PINGABLE = 'No'
+        result = '<br>'
+        for p in pingthings:
+            result += '%s: %s<br>' % (p,('No','Yes')[pingthings[p].value])
+        PINGABLE = result
         time.sleep(interval)
     # cleanup
-    pingthing.close()
+    for p in pingthings:
+        pingthings[p].close()
     logging.debug('Exiting')
 
 def make_packet(mac_address):
     # given a mac address return a wol magic packet
 
-    wol_header = '\xff' * 6
+    wol_header = b'\xff' * 6
     parts = mac_address.split(':')
 
     if len(parts) != 6:
@@ -234,32 +245,39 @@ def wol_listener():
         r, w, e = select.select(listeners, [], [], 0)
         for s in r:
             inc = ''
-##            inc = s.recv(1024)
             inc, sender = s.recvfrom(1024)
-            logging.debug('packet received from %s' % sender[0])
+            logging.debug('data received from %s' % sender[0])
+            logging.debug('\t%s' % inc)
             # validate host
             if valid_host(sender[0]) == False:
                 logging.debug('invalid sender. Ignoring packet.')
                 continue
             for k in magic_packets:
+                logging.debug('Recieved:\n\t%s\nMatching against:\n\t%s' % (inc, magic_packets[k]))
                 if (magic_packets[k] is not None
                     and magic_packets[k] in inc):
-                    # it's a magic packet we want to handle
-                    if k in ('wake', 'shutdown', 'forceoff'):
-                        target_button = POWER_SWITCH
-                    elif k == 'reset':
-                        target_button = RESET_SWITCH
-                    elif k == 'aux1':
-                        pass
-                    elif k == 'aux2':
-                        pass
-                    else:
-                        # reserved for future use
-                        pass
+                    logging.debug('Matched %s' % k)
+                    try:
+                        # it's a magic packet we want to handle
+                        if k in ('wake', 'shutdown', 'forceoff'):
+                            logging.debug('Setting button to POWER_SWITCH')
+                            target_button = POWER_SWITCH
+                        elif k == 'reset':RESET_SWITCH
+                        elif k == 'aux1':
+                            target_button = AUX1
+                        elif k == 'aux2':
+                            target_button = AUX2
+                        else:
+                            # reserved for future use
+                            logging.debug('You should never see this')
+                    except NameError:
+                        logging.exception('No pin configured for function.')
+                        target_button = None
                     if k == 'forceoff':
                         target_duration = LONG_PRESS
                     else:
                         target_duration = SHORT_PRESS
+                    logging.debug('Press duration set to %s' % target_duration)
                     go_nogo = False
                     if (k == 'wake'
                         and PSU_SENSE.is_active == False):
@@ -273,6 +291,11 @@ def wol_listener():
                     if go_nogo:
                         # press button here
                         press_button(target_button, target_duration)
+                    else:
+                        logging.debug('%s packet ignored due to current PSU state' % k)
+                else:
+                    logging.debug('Recieved data does not match %s packet' % k)
+                break
         time.sleep(0.1)
 
     for listener in listeners:
@@ -344,7 +367,6 @@ def webserver(host, port):
                         pass
                     else:
                         # must be a GET request
-                        logging.debug(line)
                         method, url, trailer = line.split()
                         # need this due to form/button hack in html code
                         url = url.split('?')[0]
@@ -441,11 +463,11 @@ def webserver(host, port):
 def start_pinger():
     global PINGABLE
     PINGABLE = 'Unknown'
-    if TARGET_ID[0] is not None:
+    if PINGER_ENABLED:
         logging.debug('(re)starting Pinger')
         ping_thread = threading.Thread(name='pinger',
                                        target=pinger,
-                                       args=(TARGET_ID[0], PING_INTERVAL))
+                                       args=(TARGET_IDS, PING_INTERVAL))
         ping_thread.start()
     else:
         ping_thread = None
@@ -499,6 +521,7 @@ if __name__ == '__main__':
                       'shutdown_mac':'',
                       'reset_mac':'',
                       'forceoff_mac':'',
+                      'ping_enabled':'True',
                       'target':'',
                       'interval':'1',
                       'restart':'True',
@@ -545,7 +568,6 @@ if __name__ == '__main__':
     
     # set up logging
     log_file = '/tmp/fakewake.log'
-##    log_file = '/tmp/fwdev.log'
     log_format = '%(asctime)s:%(levelname)s:%(threadName)s:%(message)s'
     log_filemode = 'w'
     #   manage log files
@@ -663,10 +685,14 @@ if __name__ == '__main__':
         t.strip()
         WOL_PORTS.append(int(t))
     try:
-        TARGET_ID = config.get('pinger', 'target').split(',')
+        PINGER_ENABLED = config.getboolean('pinger', 'pinger_enabled')
+        TARGET_IDS = config.get('pinger', 'target').strip().split(',')
         PING_INTERVAL = config.getfloat('pinger', 'interval')
     except configparser.NoSectionError:
-        TARGET_ID = default_config['target']
+        PINGER_ENABLED = bool(default_config['pinger_enabled'])
+        TARGET_IDS = default_config['target'].strip().split(',')
+        if TARGET_IDS is None or len(TARGET_IDS) == 0:
+            PINGER_ENABLED = False
         PING_INTERVAL = float(default_config['interval'])
     try:
         RESTART_THREADS = config.getboolean('threads', 'restart')
@@ -848,11 +874,4 @@ if __name__ == '__main__':
             AUX2.close()
         except:
             pass
-            
-        # ~ for o in(POWER_SWITCH, RESET_SWITCH, PSU_SENSE,
-                 # ~ AUX1, AUX2):
-            # ~ try:
-                # ~ o.close()
-            # ~ except:
-                # ~ pass
-            
+
