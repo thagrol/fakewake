@@ -109,12 +109,16 @@ not knowing whether the PSU is on makes behaviour unpredictable.
 the configured ports. The daemon does not listen at a low enough level in the network stack 
 to receive all ethernet frames.
 - If you're not comfortable connecting 3.3v from the PC's PSU directly to the Pi's gpio, an 
-optocoupler may be used. In which case a custom config muts be used with "psu_sense_active_low"
+optocoupler may be used. In which case a custom config must be used with "psu_sense_active_low"
 set to "True"
 while the PSU is fully on and low when the PSU is in standby, soft off, or off.
 - Pi3 and later have not been tested. They should work, but check their current requirements 
 do not exceed that provided by the 5v standby line of the PC's PSU.
 - I've no idea whether this approach will work on a Mac as I don't have access to one.
+- For the buttons/links to reboot or power off the Pi to work the user this tool is running as
+have passwordless sudo access to the "reboot" and "poweroff" commands.
+This requires not dropping privileges, running as the "pi" user with default permissions, or custom
+configuration in /etc/sudoers.
 
 ## Disclaimer & License
 
