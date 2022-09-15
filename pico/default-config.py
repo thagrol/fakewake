@@ -3,16 +3,20 @@
 ## enable debug
 debug = False
 
+## display name of PC being controlled
+pc = 'My PC'
+
 ## wlan
-#wlan = { 'ssid':'network name',
-#         'password':'network password' }
 wlan = { 'ssid':'',
          'password':'',
          # country should only need to be set if the default doesn't work
          # or you cannot acces some channels that you need to.
          'country':None,
          #maximum time to wait for a wifi connection. Seconds.
-         'maxwait': 30 }
+         'maxwait': 30,
+         # this is here because it's a parameter of WLAN.config()
+         # but is doesn't appear to be currently supported in client mode
+         'hostname':'fakewake' }
 
 ## pins
 ##   set to None to disable feature
@@ -20,7 +24,7 @@ wlan = { 'ssid':'',
 pins = { 'power':"LED",
          'reset':None,
          # if psu_sense is not enabled wol support will be disabled as it could cause an unexpected shutdown or reset
-         'psu_sense':2,
+         'psu_sense':None,
          # set to True if your PSU sense hardware pulls the pin low when the PSU
          #   is on.
          'psu_sense_active_low':False,
@@ -83,11 +87,9 @@ wol = { 'enabled':True,
         'aux2':None }
 
 ## ping target
-pinger = { 'target':None,
+pinger = { 'enabled':False,
+           'target':None,
            'interval':1.0 } # in seconds
-
-## thread management
-restart_threads = False
 
 ## security
 ## host ip based security measure
@@ -114,6 +116,5 @@ if debug:
     for name in dir():
         if not name.startswith('__'):
             print('%s:%s = %s' % (__file__,name, eval(name)))
-elif _name__ == '__main__':
-    print('Nothing to see here. Move along.')
+
     
